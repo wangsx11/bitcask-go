@@ -72,7 +72,8 @@ func TestAdaptiveRadixTree_Size(t *testing.T) {
 
 func TestAdaptiveRadixTree_Iterator(t *testing.T) {
 	art := NewART()
-	art.Iterator(false)
+	emptyIterator := art.Iterator(false)
+	emptyIterator.Close()
 
 	art.Put([]byte("ccde"), &data.LogRecordPos{Fid: 1, Offset: 100})
 	art.Put([]byte("adse"), &data.LogRecordPos{Fid: 2, Offset: 200})
@@ -80,6 +81,7 @@ func TestAdaptiveRadixTree_Iterator(t *testing.T) {
 	art.Put([]byte("bade"), &data.LogRecordPos{Fid: 4, Offset: 400})
 
 	iter := art.Iterator(true)
+	defer iter.Close()
 	for iter.Rewind(); iter.Valid(); iter.Next() {
 		key := iter.Key()
 		value := iter.Value()

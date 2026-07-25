@@ -4,23 +4,30 @@ import (
 	bitcask "bitcask-go"
 	"bitcask-go/utils"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRedisDataStructure_Get(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-get")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+func newTestRedisDataStructure(t *testing.T) *RedisDataStructure {
+	t.Helper()
+	opts := *bitcask.DefaultOptions
+	opts.DirPath = t.TempDir()
+	rds, err := NewRedisDataStructure(&opts)
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, rds.db.Close())
+	})
+	return rds
+}
 
-	err = rds.Set(utils.GetTestKey(1), 0, utils.RandomValue(100))
+func TestRedisDataStructure_Get(t *testing.T) {
+	rds := newTestRedisDataStructure(t)
+
+	err := rds.Set(utils.GetTestKey(1), 0, utils.RandomValue(100))
 	assert.Nil(t, err)
-	err = rds.Set(utils.GetTestKey(2), time.Second*2, utils.RandomValue(200))
+	err = rds.Set(utils.GetTestKey(2), 20*time.Millisecond, utils.RandomValue(200))
 	assert.Nil(t, err)
 	value1, err := rds.Get(utils.GetTestKey(1))
 	assert.Nil(t, err)
@@ -33,21 +40,17 @@ func TestRedisDataStructure_Get(t *testing.T) {
 	_, err = rds.Get(utils.GetTestKey(3))
 	assert.Equal(t, bitcask.ErrKeyNotFound, err)
 
-	time.Sleep(time.Second * 3)
+	time.Sleep(30 * time.Millisecond)
 	_, err = rds.Get(utils.GetTestKey(2))
 	assert.Equal(t, ErrKeyExpired, err)
 }
 
 func TestRedisDataStructure_Del_Type(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-del")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
 
 	//del
 
-	err = rds.Delete(utils.GetTestKey(1))
+	err := rds.Delete(utils.GetTestKey(1))
 	assert.Nil(t, err)
 	err = rds.Set(utils.GetTestKey(1), 0, utils.RandomValue(100))
 	assert.Nil(t, err)
@@ -74,11 +77,7 @@ func TestRedisDataStructure_Del_Type(t *testing.T) {
 }
 
 func TestRedisDataStructure_HGet(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-hget")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
 
 	ok1, err := rds.HSet(utils.GetTestKey(1), []byte("field1"), utils.RandomValue(100))
 	assert.Nil(t, err)
@@ -101,11 +100,7 @@ func TestRedisDataStructure_HGet(t *testing.T) {
 }
 
 func TestRedisDataStructure_HDel(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-hdel")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
 	del1, err := rds.HDel(utils.GetTestKey(200), nil)
 	assert.Nil(t, err)
 	assert.Equal(t, del1, false)
@@ -125,11 +120,7 @@ func TestRedisDataStructure_HDel(t *testing.T) {
 }
 
 func TestRedisDataStructure_HKeys(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-hkeys")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
 
 	// 测试空的 hash
 	keys1, err := rds.HKeys(utils.GetTestKey(100))
@@ -161,11 +152,7 @@ func TestRedisDataStructure_HKeys(t *testing.T) {
 }
 
 func TestRedisDataStructure_HValues(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-hvalues")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
 
 	// 测试空的 hash
 	values1, err := rds.HValues(utils.GetTestKey(200))
@@ -199,11 +186,7 @@ func TestRedisDataStructure_HValues(t *testing.T) {
 }
 
 func TestRedisDataStructure_HGetAll(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-hgetall")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
 
 	// 测试空的 hash
 	result1, err := rds.HGetAll(utils.GetTestKey(300))
@@ -239,11 +222,7 @@ func TestRedisDataStructure_HGetAll(t *testing.T) {
 }
 
 func TestRedisDataStructure_SIsMember(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-sismember")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
 
 	ok1, err := rds.SAdd(utils.GetTestKey(1), []byte("member1"))
 	assert.Nil(t, err)
@@ -270,11 +249,7 @@ func TestRedisDataStructure_SIsMember(t *testing.T) {
 }
 
 func TestRedisDataStructure_SRem(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-sismember")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
 
 	ok1, err := rds.SAdd(utils.GetTestKey(1), []byte("member1"))
 	assert.Nil(t, err)
@@ -298,11 +273,8 @@ func TestRedisDataStructure_SRem(t *testing.T) {
 }
 
 func TestRedisDataStructure_List(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-list")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
+	var err error
 	res, err := rds.LPush(utils.GetTestKey(1), []byte("member-1"))
 	t.Log(res, err)
 	res, err = rds.LPush(utils.GetTestKey(1), []byte("member-2"))
@@ -352,11 +324,7 @@ func TestRedisDataStructure_List(t *testing.T) {
 }
 
 func TestRedisDataStructure_LAll(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-lall")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
 
 	// 测试空列表
 	result1, err := rds.LAll(utils.GetTestKey(1))
@@ -422,11 +390,7 @@ func TestRedisDataStructure_LAll(t *testing.T) {
 }
 
 func TestRedisDataStructure_ZScore(t *testing.T) {
-	opts := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-redis-lall")
-	opts.DirPath = dir
-	rds, err := NewRedisDataStructure(opts)
-	assert.Nil(t, err)
+	rds := newTestRedisDataStructure(t)
 	ok, err := rds.ZAdd(utils.GetTestKey(1), 1.0, []byte("member-1"))
 	assert.Nil(t, err)
 	assert.Equal(t, true, ok)

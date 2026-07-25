@@ -1,91 +1,74 @@
 package fio
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func destory(name string) {
-	if err := os.RemoveAll(name); err != nil {
-		panic(err)
-	}
+func newTestFileIO(t *testing.T) *FileIO {
+	t.Helper()
+
+	ioManager, err := NewFileIOManager(filepath.Join(t.TempDir(), "test.data"))
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, ioManager.Close())
+	})
+	return ioManager
 }
 
-func TestnewIOManager(t *testing.T) {
-	path := filepath.Join("/tmp", "a.data")
-	fio, err := NewFileIOManager(path)
-	defer destory(path)
-
-	assert.Nil(t, err)
-	assert.NotNil(t, fio)
+func TestNewIOManager(t *testing.T) {
+	ioManager := newTestFileIO(t)
+	assert.NotNil(t, ioManager)
 }
 
 func TestWrite(t *testing.T) {
-	path := filepath.Join("/tmp", "a.data")
-	fio, _ := NewFileIOManager(path)
-	defer destory(path)
+	ioManager := newTestFileIO(t)
 
-	b := []byte("hello\n")
-	n, err := fio.Write(b)
-	assert.Nil(t, err)
+	n, err := ioManager.Write([]byte("hello\n"))
+	assert.NoError(t, err)
 	assert.Equal(t, 6, n)
 }
 
 func TestRead(t *testing.T) {
-	path := filepath.Join("/tmp", "a.data")
-	fio, _ := NewFileIOManager(path)
-	defer destory(path)
+	ioManager := newTestFileIO(t)
 
-	// 从文件初始位置写入
-	n, err := fio.Write([]byte("key-a"))
-	assert.Nil(t, err)
+	n, err := ioManager.Write([]byte("key-a"))
+	assert.NoError(t, err)
 	assert.Equal(t, 5, n)
-	// 从文件初始读
-	b1 := make([]byte, 5)
-	n, err = fio.Read(b1, 0)
-	assert.Nil(t, err)
-	assert.Equal(t, 5, n)
-	// t.Log(string(b1))
-	assert.Equal(t, 5, n)
-	assert.Equal(t, []byte("key-a"), b1)
 
-	n, err = fio.Write([]byte("key-b"))
-	assert.Nil(t, err)
+	first := make([]byte, 5)
+	n, err = ioManager.Read(first, 0)
+	assert.NoError(t, err)
 	assert.Equal(t, 5, n)
-	b2 := make([]byte, 5)
-	n, err = fio.Read(b2, 5)
-	assert.Nil(t, err)
+	assert.Equal(t, []byte("key-a"), first)
+
+	n, err = ioManager.Write([]byte("key-b"))
+	assert.NoError(t, err)
 	assert.Equal(t, 5, n)
-	// t.Log(string(b2))
+
+	second := make([]byte, 5)
+	n, err = ioManager.Read(second, 5)
+	assert.NoError(t, err)
 	assert.Equal(t, 5, n)
-	assert.Equal(t, []byte("key-b"), b2)
+	assert.Equal(t, []byte("key-b"), second)
 }
 
 func TestSync(t *testing.T) {
-	path := filepath.Join("/tmp", "a.data")
-	fio, _ := NewFileIOManager(path)
-	defer destory(path)
+	ioManager := newTestFileIO(t)
 
-	n, err := fio.Write([]byte("hello"))
-	assert.Nil(t, err)
-	assert.Equal(t, 5, n)
-
-	err = fio.Sync()
-	assert.Nil(t, err)
+	_, err := ioManager.Write([]byte("hello"))
+	assert.NoError(t, err)
+	assert.NoError(t, ioManager.Sync())
 }
 
 func TestClose(t *testing.T) {
-	path := filepath.Join("/tmp", "a.data")
-	fio, _ := NewFileIOManager(path)
-	defer destory(path)
+	path := filepath.Join(t.TempDir(), "test.data")
+	ioManager, err := NewFileIOManager(path)
+	assert.NoError(t, err)
 
-	n, err := fio.Write([]byte("hello"))
-	assert.Nil(t, err)
-	assert.Equal(t, 5, n)
-
-	err = fio.Close()
-	assert.Nil(t, err)
+	_, err = ioManager.Write([]byte("hello"))
+	assert.NoError(t, err)
+	assert.NoError(t, ioManager.Close())
 }

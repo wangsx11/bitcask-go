@@ -8,46 +8,34 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestMMapRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mmap.data")
 
+	emptyMMap, err := NewMMapIOManager(path)
+	assert.NoError(t, err)
+	buffer := make([]byte, 10)
+	n, err := emptyMMap.Read(buffer, 0)
+	assert.Equal(t, 0, n)
+	assert.ErrorIs(t, err, io.EOF)
+	assert.NoError(t, emptyMMap.Close())
 
-func TestMMap_Read(t *testing.T) {
-	path := filepath.Join("/tmp", "mmap-a.data")
-	defer destory(path)
+	fileIO, err := NewFileIOManager(path)
+	assert.NoError(t, err)
+	_, err = fileIO.Write([]byte("aabbcc"))
+	assert.NoError(t, err)
+	assert.NoError(t, fileIO.Close())
 
-	
 	mmapIO, err := NewMMapIOManager(path)
-	assert.Nil(t, err)
-	assert.NotNil(t, mmapIO)
+	assert.NoError(t, err)
+	defer func() { assert.NoError(t, mmapIO.Close()) }()
 
-	// 文件为空
-	b1 := make([]byte, 10)
-	n1, err := mmapIO.Read(b1, 0)
-	assert.Equal(t, 0, n1)
-	assert.Equal(t, io.EOF, err)
-
-
-	// 有文件的情况
-	fio, err := NewFileIOManager(path)
-	assert.Nil(t, err)
-	assert.NotNil(t, fio)
-	_, err = fio.Write([]byte("aa"))
-	assert.Nil(t, err)
-	_, err = fio.Write([]byte("bb"))
-	assert.Nil(t, err)
-	_, err = fio.Write([]byte("cc"))
-	assert.Nil(t, err)
-	fio.Close()
-
-	mmapIO2, err := NewMMapIOManager(path)
-	assert.Nil(t, err)
-	assert.NotNil(t, mmapIO2)
-	size, err := mmapIO2.Size()
-	assert.Nil(t, err)
+	size, err := mmapIO.Size()
+	assert.NoError(t, err)
 	assert.Equal(t, int64(6), size)
 
-	b2 := make([]byte, 2)
-	n2, err := mmapIO2.Read(b2, 0)
-	assert.Nil(t, err)
-	assert.Equal(t, 2, n2)
-	assert.Equal(t, "aa", string(b2))
+	value := make([]byte, 2)
+	n, err = mmapIO.Read(value, 0)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, n)
+	assert.Equal(t, "aa", string(value))
 }
