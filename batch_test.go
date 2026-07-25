@@ -15,7 +15,8 @@ func TestDB_WriteBatch(t *testing.T) {
 	assert.NotNil(t, db)
 
 	// 写数据之后并不提交
-	wb := db.NewWriteBatch(DefaultWriteBatchOptions)
+	wb, err := db.NewWriteBatch(DefaultWriteBatchOptions)
+	assert.NoError(t, err)
 	err = wb.Put(utils.GetTestKey(1), utils.RandomValue(10))
 	assert.Nil(t, err)
 	err = wb.Delete(utils.GetTestKey(2))
@@ -32,7 +33,8 @@ func TestDB_WriteBatch(t *testing.T) {
 	assert.NotNil(t, val)
 
 	// 删除数据
-	wb2 := db.NewWriteBatch(DefaultWriteBatchOptions)
+	wb2, err := db.NewWriteBatch(DefaultWriteBatchOptions)
+	assert.NoError(t, err)
 
 	err = wb2.Delete(utils.GetTestKey(1))
 	assert.Nil(t, err)
@@ -54,7 +56,8 @@ func TestDB_WriteBatch2(t *testing.T) {
 	err = db.Put(utils.GetTestKey(1), utils.GetTestKey(10))
 	assert.Nil(t, err)
 
-	wb := db.NewWriteBatch(DefaultWriteBatchOptions)
+	wb, err := db.NewWriteBatch(DefaultWriteBatchOptions)
+	assert.NoError(t, err)
 	err = wb.Put(utils.GetTestKey(2), utils.GetTestKey(10))
 	assert.Nil(t, err)
 

@@ -12,7 +12,7 @@ import (
 
 func newTestRedisDataStructure(t *testing.T) *RedisDataStructure {
 	t.Helper()
-	opts := *bitcask.DefaultOptions
+	opts := bitcask.DefaultOptions()
 	opts.DirPath = t.TempDir()
 	rds, err := NewRedisDataStructure(&opts)
 	assert.NoError(t, err)

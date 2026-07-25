@@ -16,7 +16,7 @@ func destroyDB(db *DB) {
 
 func testOptions(t *testing.T) *Options {
 	t.Helper()
-	opts := *DefaultOptions
+	opts := DefaultOptions()
 	opts.DirPath = t.TempDir()
 	return &opts
 }
@@ -218,13 +218,15 @@ func TestDB_ListKeys(t *testing.T) {
 	assert.NotNil(t, db)
 
 	// 数据库为空
-	keys1 := db.ListKeys()
+	keys1, err := db.ListKeys()
+	assert.NoError(t, err)
 	assert.Equal(t, 0, len(keys1))
 
 	// 只有一条数据
 	err = db.Put(utils.GetTestKey(11), utils.RandomValue(20))
 	assert.Nil(t, err)
-	keys2 := db.ListKeys()
+	keys2, err := db.ListKeys()
+	assert.NoError(t, err)
 	assert.Equal(t, 1, len(keys2))
 
 	// 有多条数据
@@ -235,7 +237,8 @@ func TestDB_ListKeys(t *testing.T) {
 	err = db.Put(utils.GetTestKey(44), utils.RandomValue(20))
 	assert.Nil(t, err)
 
-	keys3 := db.ListKeys()
+	keys3, err := db.ListKeys()
+	assert.NoError(t, err)
 	assert.Equal(t, 4, len(keys3))
 	for _, k := range keys3 {
 		assert.NotNil(t, k)
@@ -332,7 +335,8 @@ func TestDB_Stat(t *testing.T) {
 		// assert.Nil(t, err)
 	}
 
-	stat := db.Stat()
+	stat, err := db.Stat()
+	assert.NoError(t, err)
 	assert.NotNil(t, stat)
 }
 
@@ -352,7 +356,7 @@ func TestDB_Backup(t *testing.T) {
 	err = db.Backup(backupDir)
 	assert.Nil(t, err)
 
-	opts1 := *DefaultOptions
+	opts1 := DefaultOptions()
 	opts1.DirPath = backupDir
 	db2, err := Open(&opts1)
 	defer destroyDB(db2)

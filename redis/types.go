@@ -105,7 +105,10 @@ func (rds *RedisDataStructure) HSet(key, field, value []byte) (bool, error) {
 	if _, err := rds.db.Get(encKey); err == bitcask.ErrKeyNotFound {
 		exist = false
 	}
-	wb := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	wb, err := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	if err != nil {
+		return false, err
+	}
 	// 不存在则更新元数据
 	if !exist {
 		meta.size++
@@ -157,7 +160,10 @@ func (rds *RedisDataStructure) HDel(key, field []byte) (bool, error) {
 		exist = false
 	}
 	if exist {
-		wb := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+		wb, err := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+		if err != nil {
+			return false, err
+		}
 		meta.size--
 		_ = wb.Put(key, meta.encode())
 		_ = wb.Delete(encKey)
@@ -182,7 +188,10 @@ func (rds *RedisDataStructure) HKeys(key []byte) ([][]byte, error) {
 		field:   nil,
 	}
 	prefix := prefixKey.encodePrefix()
-	iterator := rds.db.NewIterator(bitcask.DefaultIteratorOptions)
+	iterator, err := rds.db.NewIterator(bitcask.DefaultIteratorOptions)
+	if err != nil {
+		return nil, err
+	}
 	defer iterator.Close()
 
 	keys := make([][]byte, 0, meta.size)
@@ -211,7 +220,10 @@ func (rds *RedisDataStructure) HValues(key []byte) ([][]byte, error) {
 		field:   nil,
 	}
 	prefix := prefixKey.encodePrefix()
-	iterator := rds.db.NewIterator(bitcask.DefaultIteratorOptions)
+	iterator, err := rds.db.NewIterator(bitcask.DefaultIteratorOptions)
+	if err != nil {
+		return nil, err
+	}
 	defer iterator.Close()
 	values := make([][]byte, 0, meta.size)
 
@@ -239,7 +251,10 @@ func (rds *RedisDataStructure) HGetAll(key []byte) (map[string][]byte, error) {
 		field:   nil,
 	}
 	prefix := prefixKey.encodePrefix()
-	iterator := rds.db.NewIterator(bitcask.DefaultIteratorOptions)
+	iterator, err := rds.db.NewIterator(bitcask.DefaultIteratorOptions)
+	if err != nil {
+		return nil, err
+	}
 	defer iterator.Close()
 	result := make(map[string][]byte, meta.size)
 	for iterator.Seek(prefix); iterator.Valid(); iterator.Next() {
@@ -266,7 +281,10 @@ func (rds *RedisDataStructure) SAdd(key, member []byte) (bool, error) {
 	}
 	var ok bool
 	if _, err = rds.db.Get(sk.enocde()); err == bitcask.ErrKeyNotFound {
-		wb := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+		wb, err := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+		if err != nil {
+			return false, err
+		}
 		meta.size++
 		_ = wb.Put(key, meta.encode())
 		_ = wb.Put(sk.enocde(), nil)
@@ -317,7 +335,10 @@ func (rds *RedisDataStructure) SRem(key, member []byte) (bool, error) {
 	if _, err = rds.db.Get(sk.enocde()); err == bitcask.ErrKeyNotFound {
 		return false, nil
 	}
-	wb := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	wb, err := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	if err != nil {
+		return false, err
+	}
 	meta.size--
 	_ = wb.Put(key, meta.encode())
 	_ = wb.Delete(sk.enocde())
@@ -397,7 +418,10 @@ func (rds *RedisDataStructure) pushInner(key, element []byte, isLeft bool) (uint
 		lk.index = meta.tail
 	}
 	// 更新元数据和数据部分
-	wb := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	wb, err := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	if err != nil {
+		return 0, err
+	}
 	meta.size++
 	if isLeft {
 		meta.head--
@@ -481,7 +505,10 @@ func (rds *RedisDataStructure) ZAdd(key []byte, score float64, member []byte) (b
 	}
 
 	// 更新元数据和数据
-	wb := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	wb, err := rds.db.NewWriteBatch(bitcask.DefaultWriteBatchOptions)
+	if err != nil {
+		return false, err
+	}
 	if !exist {
 		meta.size++
 		wb.Put(key, meta.encode())

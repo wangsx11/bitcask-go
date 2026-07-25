@@ -10,7 +10,6 @@ type Options struct {
 	IndexerType        IndexerType // 索引类型
 	MMapAtStartup      bool        // 启动时是否需要使用 MMap 加载数据
 	DataFileMergeRatio float32     // 数据文件合并的阈值
-
 }
 
 // IteratorOptions 索引迭代器配置项
@@ -41,14 +40,17 @@ const (
 	BPlusTree
 )
 
-var DefaultOptions = &Options{
-	DirPath:       os.TempDir(),
-	DataFileSize:  256 * 1024 * 1024, // 256MB
-	SyncWrites:    false,
-	BytesPerSync:  0,
-	IndexerType:   ART,
-	MMapAtStartup: false,
-	DataFileMergeRatio: 0.5,
+// DefaultOptions returns an independent default configuration.
+func DefaultOptions() Options {
+	return Options{
+		DirPath:            os.TempDir(),
+		DataFileSize:       256 * 1024 * 1024, // 256MB
+		SyncWrites:         false,
+		BytesPerSync:       0,
+		IndexerType:        ART,
+		MMapAtStartup:      false,
+		DataFileMergeRatio: 0.5,
+	}
 }
 
 var DefaultIteratorOptions = IteratorOptions{

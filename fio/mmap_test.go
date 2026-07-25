@@ -39,3 +39,20 @@ func TestMMapRead(t *testing.T) {
 	assert.Equal(t, 2, n)
 	assert.Equal(t, "aa", string(value))
 }
+
+func TestMMapIsReadOnly(t *testing.T) {
+	fileName := filepath.Join(t.TempDir(), "readonly.data")
+	mmapIO, err := NewMMapIOManager(fileName)
+	assert.NoError(t, err)
+	defer func() { assert.NoError(t, mmapIO.Close()) }()
+
+	_, err = mmapIO.Write([]byte("value"))
+	assert.ErrorIs(t, err, ErrReadOnly)
+	assert.ErrorIs(t, mmapIO.Sync(), ErrReadOnly)
+}
+
+func TestNewIOManagerUnsupportedType(t *testing.T) {
+	manager, err := NewIOManager(filepath.Join(t.TempDir(), "data"), 99)
+	assert.Nil(t, manager)
+	assert.ErrorIs(t, err, ErrUnsupportedIOType)
+}

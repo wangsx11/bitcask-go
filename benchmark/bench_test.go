@@ -14,7 +14,7 @@ const (
 
 func openBenchmarkDB(b *testing.B) *bitcask.DB {
 	b.Helper()
-	opts := *bitcask.DefaultOptions
+	opts := bitcask.DefaultOptions()
 	opts.DirPath = b.TempDir()
 
 	db, err := bitcask.Open(&opts)

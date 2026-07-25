@@ -2,24 +2,27 @@ package index
 
 import (
 	"bitcask-go/data"
+	"errors"
 )
+
+var ErrUnsupportedIndexType = errors.New("unsupported index type")
 
 // Indexer 抽象索引接口， 后续如果想要接入其他的数据结构，则直接实现这个接口即可
 type Indexer interface {
 	// Put 向索引中存储 key 对应的数据位置信息
-	Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos
+	Put(key []byte, pos *data.LogRecordPos) (*data.LogRecordPos, error)
 
 	// Get 根据 key 获取数据位置信息
-	Get(key []byte) *data.LogRecordPos
+	Get(key []byte) (*data.LogRecordPos, error)
 
 	// Delete 根据 key 删除数据
-	Delete(key []byte) (*data.LogRecordPos, bool)
+	Delete(key []byte) (*data.LogRecordPos, bool, error)
 
 	// Size 索引中的数据量
-	Size() int
+	Size() (int, error)
 
 	// Iterator 索引迭代器
-	Iterator(reverse bool) Iterator
+	Iterator(reverse bool) (Iterator, error)
 
 	// Close 关闭索引
 	Close() error
@@ -37,16 +40,16 @@ const (
 	BPTree
 )
 
-func NewIndexer(typ IndexType, dirPath string, sync bool) Indexer {
+func NewIndexer(typ IndexType, dirPath string, sync bool) (Indexer, error) {
 	switch typ {
 	case Btree:
-		return NewBTree()
+		return NewBTree(), nil
 	case ART:
-		return NewART()
+		return NewART(), nil
 	case BPTree:
 		return NewBPlusTree(dirPath, sync)
 	default:
-		panic("unsupported index type")
+		return nil, ErrUnsupportedIndexType
 	}
 }
 
@@ -72,5 +75,5 @@ type Iterator interface {
 	// 当前遍历位置的 value 数据
 	Value() *data.LogRecordPos
 	// 关闭迭代器，释放相应资源
-	Close()
+	Close() error
 }

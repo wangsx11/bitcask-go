@@ -12,11 +12,14 @@ type MMap struct {
 }
 
 func NewMMapIOManager(fileName string) (*MMap, error) {
-	_, err := os.OpenFile(fileName, os.O_CREATE, DataFilePerm)
+	file, err := os.OpenFile(fileName, os.O_CREATE, DataFilePerm)
 	if err != nil {
 		return nil, err
 	}
-	
+	if err := file.Close(); err != nil {
+		return nil, err
+	}
+
 	readerAt, err := mmap.Open(fileName)
 
 	if err != nil {
@@ -32,12 +35,11 @@ func (mmap *MMap) Read(b []byte, offset int64) (int, error) {
 }
 
 func (mmap *MMap) Write([]byte) (int, error) {
-	panic("not implemented")
+	return 0, ErrReadOnly
 }
 
 func (mmap *MMap) Sync() error {
-	panic("not implemented")
-
+	return ErrReadOnly
 }
 
 func (mmap *MMap) Close() error {

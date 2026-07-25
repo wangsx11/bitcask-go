@@ -1,15 +1,25 @@
 package fio
 
+import "errors"
+
 const DataFilePerm = 0644
+
+var (
+	ErrUnsupportedIOType = errors.New("unsupported io type")
+	ErrReadOnly          = errors.New("io manager is read-only")
+)
 
 type FileIOType = byte
 
 const (
 	// 标准文件 IO
-	StanderFIO = iota
+	StandardFIO = iota
 	// 内存文件映射
 	MemoryMap
 )
+
+// Deprecated: use StandardFIO.
+const StanderFIO = StandardFIO
 
 // 抽象 IO 管理接口，可以接入不同的 IO 类型， 目前支持标准文件 IO
 type IOManager interface {
@@ -28,15 +38,15 @@ type IOManager interface {
 	// 获取文件大小
 	Size() (int64, error)
 }
-	
+
 // 初始化 IOManager 目前只支持FileIO
 func NewIOManager(fileName string, ioType FileIOType) (IOManager, error) {
 	switch ioType {
-	case StanderFIO:
+	case StandardFIO:
 		return NewFileIOManager(fileName)
 	case MemoryMap:
 		return NewMMapIOManager(fileName)
 	default:
-		panic("unsupported io type")
+		return nil, ErrUnsupportedIOType
 	}
 }

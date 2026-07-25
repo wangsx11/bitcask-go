@@ -29,52 +29,51 @@ func (ai *Item) Less(bi btree.Item) bool { // key 的比较规则
 	return bytes.Compare(ai.key, bi.(*Item).key) == -1
 }
 
-
-func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
+func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) (*data.LogRecordPos, error) {
 	it := &Item{key: key, pos: pos}
 	bt.lock.Lock()
 	oldItem := bt.tree.ReplaceOrInsert(it)
 	bt.lock.Unlock()
 	if oldItem == nil {
-		return nil
+		return nil, nil
 	}
-	return oldItem.(*Item).pos
+	return oldItem.(*Item).pos, nil
 }
 
-func (bt *BTree) Get(key []byte) *data.LogRecordPos {
+func (bt *BTree) Get(key []byte) (*data.LogRecordPos, error) {
 	it := &Item{key: key}
 	btreeItem := bt.tree.Get(it) // 这里返回的btreeItem是一个interface{} 所以后续还需要进行断言
 	if btreeItem == nil {
-		return nil
+		return nil, nil
 	}
-	return btreeItem.(*Item).pos
+	return btreeItem.(*Item).pos, nil
 }
-func (bt *BTree) Delete(key []byte) (*data.LogRecordPos, bool) {
+func (bt *BTree) Delete(key []byte) (*data.LogRecordPos, bool, error) {
 	it := &Item{key: key}
 	bt.lock.Lock()
 	oldItem := bt.tree.Delete(it)
 	bt.lock.Unlock()
 	if oldItem == nil {
-		return nil, false
+		return nil, false, nil
 	}
-	return oldItem.(*Item).pos, true
+	return oldItem.(*Item).pos, true, nil
 }
 
-func (bt *BTree) Size() int {
+func (bt *BTree) Size() (int, error) {
 	if bt.tree == nil {
-		return 0
+		return 0, nil
 	}
 	bt.lock.RLock()
 	defer bt.lock.RUnlock()
-	return bt.tree.Len()
+	return bt.tree.Len(), nil
 }
-func (bt *BTree) Iterator(reverse bool) Iterator {
+func (bt *BTree) Iterator(reverse bool) (Iterator, error) {
 	if bt.tree == nil {
-		return nil
+		return nil, nil
 	}
 	bt.lock.RLock()
 	defer bt.lock.RUnlock()
-	return newBtreeIterator(bt.tree, reverse)
+	return newBtreeIterator(bt.tree, reverse), nil
 }
 
 func (bt *BTree) Close() error {
@@ -114,6 +113,7 @@ func newBtreeIterator(tree *btree.BTree, reverse bool) *btreeIterator {
 func (bti *btreeIterator) Rewind() {
 	bti.currIndex = 0
 }
+
 // Seek 将迭代器定位到指定key的位置，确保后续遍历能获取到所有匹配前缀的key
 // 正向遍历：定位到第一个 >= key 的位置，向后遍历更大的key
 // 反向遍历：定位到第一个 <= key 的位置，向前遍历更小的key
@@ -142,6 +142,7 @@ func (bti *btreeIterator) Key() []byte {
 func (bti *btreeIterator) Value() *data.LogRecordPos {
 	return bti.values[bti.currIndex].pos
 }
-func (bti *btreeIterator) Close() {
+func (bti *btreeIterator) Close() error {
 	bti.values = nil
+	return nil
 }

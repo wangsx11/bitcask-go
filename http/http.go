@@ -8,15 +8,17 @@ import (
 	"net/http"
 	"os"
 )
+
 var db *bitcask.DB
+
 func init() {
 
 	// 初始化 DB 实例
 	var err error
-	options := bitcask.DefaultOptions
+	options := bitcask.DefaultOptions()
 	dir, _ := os.MkdirTemp("", "bitcask-go-http")
 	options.DirPath = dir
-	db, err = bitcask.Open(options)
+	db, err = bitcask.Open(&options)
 	if err != nil {
 		panic(fmt.Sprintf("failed to open db: %v", err))
 	}
@@ -59,7 +61,7 @@ func handleGet(writer http.ResponseWriter, request *http.Request) {
 	_ = json.NewEncoder(writer).Encode(string(value))
 }
 
-func handleDelete(writer http.ResponseWriter, request *http.Request) { 
+func handleDelete(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodDelete {
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -76,12 +78,16 @@ func handleDelete(writer http.ResponseWriter, request *http.Request) {
 	_ = json.NewEncoder(writer).Encode("OK")
 }
 
-func handleListkeys(writer http.ResponseWriter, request *http.Request) { 
+func handleListkeys(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	keys := db.ListKeys()
+	keys, err := db.ListKeys()
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	writer.Header().Set("content-type", "application/json")
 	var result []string
 	for _, key := range keys {
@@ -91,16 +97,19 @@ func handleListkeys(writer http.ResponseWriter, request *http.Request) {
 
 }
 
-func hadnleStat(writer http.ResponseWriter, request *http.Request) { 
+func hadnleStat(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet {
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	stat := db.Stat()
+	stat, err := db.Stat()
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	writer.Header().Set("content-type", "application/json")
 	_ = json.NewEncoder(writer).Encode(stat)
 }
-
 
 func main() {
 	// 注册处理方法

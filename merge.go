@@ -3,6 +3,7 @@ package bitcask_go
 import (
 	"bitcask-go/data"
 	"bitcask-go/utils"
+	"errors"
 	"io"
 	"os"
 	"path"
@@ -16,17 +17,22 @@ const (
 	mergeFinishedKey = "merge.finished"
 )
 
-func (db *DB) Merge() error {
+func (db *DB) Merge() (retErr error) {
+	db.mu.Lock()
+	if db.closed {
+		db.mu.Unlock()
+		return ErrClosed
+	}
 	// 如果活跃数据文件为空，直接返回(数据库为空)
 	if db.activeFile == nil {
+		db.mu.Unlock()
 		return nil
 	}
-	db.mu.Lock()
 
 	// 如果 Merge 正在进行中，直接返回
 	if db.isMerging {
 		db.mu.Unlock()
-		return ErrMergIsProcess
+		return ErrMergeIsProcessing
 	}
 
 	// 查看失效数据量是否达到需要merge的阈值
@@ -35,7 +41,7 @@ func (db *DB) Merge() error {
 		db.mu.Unlock()
 		return err
 	}
-	if float32(db.reclaimSize) / float32(totalSize) < db.options.DataFileMergeRatio {
+	if float32(db.reclaimSize)/float32(totalSize) < db.options.DataFileMergeRatio {
 		db.mu.Unlock()
 		return ErrMergeRatioUnreached
 	}
@@ -46,17 +52,19 @@ func (db *DB) Merge() error {
 		return err
 	}
 
-
 	// 磁盘剩余空间是否可以继续执行Merge
-	if uint64(totalSize - db.reclaimSize) >= availableSize {
+	if uint64(totalSize-db.reclaimSize) >= availableSize {
 		db.mu.Unlock()
 		return ErrDataDirectoryCorrupted
 	}
 
-
 	db.isMerging = true
+	db.mergeWG.Add(1)
 	defer func() {
+		db.mu.Lock()
 		db.isMerging = false
+		db.mu.Unlock()
+		db.mergeWG.Done()
 	}()
 
 	// 持久化当前活跃文件   ---> 如果在执行 Merge 时，还在进行Put(也在使用当前活跃文件 是否存在问题？)
@@ -88,7 +96,6 @@ func (db *DB) Merge() error {
 	}
 	// 保存完所有待Merge文件后就可以释放锁，减少锁等待时间
 	db.mu.Unlock()
-	
 
 	// 待 merge 的文件按照ID从小到大进行排序，依次 merge
 	sort.Slice(mergeFiles, func(i, j int) bool {
@@ -112,15 +119,17 @@ func (db *DB) Merge() error {
 	mergeOptions := db.options
 	mergeOptions.DirPath = mergePath
 	mergeOptions.SyncWrites = false // 只在Merge结束时再调用依次Sync操作
-	mergeDB, err := Open(mergeOptions)
+	mergeDB, err := Open(&mergeOptions)
 	if err != nil {
 		return err
 	}
+	defer func() { retErr = errors.Join(retErr, mergeDB.Close()) }()
 	// 打开一个 hint 文件存储索引
 	hintFile, err := data.OpenHintFile(mergePath)
 	if err != nil {
 		return err
 	}
+	defer func() { retErr = errors.Join(retErr, hintFile.Close()) }()
 	// 遍历所有的数据文件，将数据写入到 mergeDB 中
 	for _, dataFile := range mergeFiles {
 		var offset int64 = 0
@@ -134,7 +143,10 @@ func (db *DB) Merge() error {
 
 			}
 			realKey, _ := parseLogRecordKey(logRecord.Key)
-			logRecordPos := db.index.Get(realKey)
+			logRecordPos, err := db.index.Get(realKey)
+			if err != nil {
+				return err
+			}
 			// 和内存中的索引位置进行比较，如果有效则重写
 			if logRecordPos != nil &&
 				logRecordPos.Fid == dataFile.FileId &&
@@ -158,7 +170,6 @@ func (db *DB) Merge() error {
 		}
 	}
 
-
 	if err := hintFile.Sync(); err != nil {
 		return err
 	}
@@ -171,6 +182,7 @@ func (db *DB) Merge() error {
 	if err != nil {
 		return err
 	}
+	defer func() { retErr = errors.Join(retErr, mergeFinishedFile.Close()) }()
 	mergeFinRecord := &data.LogRecord{
 		Key:   []byte(mergeFinishedKey),
 		Value: []byte(strconv.Itoa(int(nonMergeFileId))),
@@ -257,11 +269,12 @@ func (db *DB) LoadMergeFiles() error {
 	return nil
 }
 
-func (db *DB) getNonMergeFileId(dirPath string) (uint32, error) {
+func (db *DB) getNonMergeFileId(dirPath string) (fileID uint32, retErr error) {
 	mergeFishedFile, err := data.OpenMergeFinishedFile(dirPath)
 	if err != nil {
 		return 0, err
 	}
+	defer func() { retErr = errors.Join(retErr, mergeFishedFile.Close()) }()
 	record, _, err := mergeFishedFile.ReadLogRecord(0)
 	if err != nil {
 		return 0, err
@@ -273,7 +286,7 @@ func (db *DB) getNonMergeFileId(dirPath string) (uint32, error) {
 	return uint32(nonMergeFileId), nil
 }
 
-func (db *DB) loadIndexFromHintFile() error {
+func (db *DB) loadIndexFromHintFile() (retErr error) {
 	// hint文件只有一个 我在Merge的时候是否会存在一个hint文件存储不够的情况发生呢？
 	hintFileName := filepath.Join(db.options.DirPath, data.HintFileName)
 	if _, err := os.Stat(hintFileName); os.IsNotExist(err) {
@@ -284,6 +297,7 @@ func (db *DB) loadIndexFromHintFile() error {
 	if err != nil {
 		return err
 	}
+	defer func() { retErr = errors.Join(retErr, hintFile.Close()) }()
 	// 读取文件中的索引
 	var offset int64 = 0
 	for {
@@ -296,7 +310,9 @@ func (db *DB) loadIndexFromHintFile() error {
 		}
 		// 解码拿到实际的位置索引信息
 		pos := data.DecodeLogRecordPos(logRecord.Value)
-		db.index.Put(logRecord.Key, pos)
+		if _, err := db.index.Put(logRecord.Key, pos); err != nil {
+			return err
+		}
 		offset += size
 	}
 	return nil

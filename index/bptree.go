@@ -2,7 +2,7 @@ package index
 
 import (
 	"bitcask-go/data"
-	// "fmt"
+	"errors"
 	"path/filepath"
 
 	"go.etcd.io/bbolt"
@@ -20,12 +20,12 @@ type BPlusTree struct {
 	tree *bbolt.DB
 }
 
-func NewBPlusTree(dirPath string, syncWrites bool) *BPlusTree {
-	opts := bbolt.DefaultOptions // bbolt 默认配置项
+func NewBPlusTree(dirPath string, syncWrites bool) (*BPlusTree, error) {
+	opts := *bbolt.DefaultOptions // 复制默认配置，避免修改 bbolt 的共享配置
 	opts.NoSync = !syncWrites
-	bptree, err := bbolt.Open(filepath.Join(dirPath, bptreeIndexFileName), 0644, opts)
+	bptree, err := bbolt.Open(filepath.Join(dirPath, bptreeIndexFileName), 0644, &opts)
 	if err != nil {
-		panic("failed to open bptree")
+		return nil, err
 	}
 
 	// 创建对应的 bucket
@@ -33,15 +33,15 @@ func NewBPlusTree(dirPath string, syncWrites bool) *BPlusTree {
 		_, err := tx.CreateBucketIfNotExists(indexBucketName)
 		return err
 	}); err != nil {
-		panic("failed to create bucket in bptree")
+		return nil, errors.Join(err, bptree.Close())
 	}
 
 	return &BPlusTree{
 		tree: bptree,
-	}
+	}, nil
 }
 
-func (bpt *BPlusTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
+func (bpt *BPlusTree) Put(key []byte, pos *data.LogRecordPos) (*data.LogRecordPos, error) {
 	var oldVal []byte
 	if err := bpt.tree.Update(func(tx *bbolt.Tx) error {
 
@@ -49,15 +49,15 @@ func (bpt *BPlusTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos
 		oldVal = bucket.Get(key)
 		return bucket.Put(key, data.EncodeLogRecordPos(pos))
 	}); err != nil {
-		panic("failed to put key into bptree")
+		return nil, err
 	}
 	if len(oldVal) == 0 {
-		return nil
+		return nil, nil
 	}
-	return data.DecodeLogRecordPos(oldVal)
+	return data.DecodeLogRecordPos(oldVal), nil
 }
 
-func (bpt *BPlusTree) Get(key []byte) *data.LogRecordPos {
+func (bpt *BPlusTree) Get(key []byte) (*data.LogRecordPos, error) {
 	var pos *data.LogRecordPos
 	if err := bpt.tree.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(indexBucketName)
@@ -67,12 +67,12 @@ func (bpt *BPlusTree) Get(key []byte) *data.LogRecordPos {
 		}
 		return nil
 	}); err != nil {
-		panic("failed to get key from bptree")
+		return nil, err
 	}
-	return pos
+	return pos, nil
 }
 
-func (bpt *BPlusTree) Delete(key []byte) (*data.LogRecordPos, bool) {
+func (bpt *BPlusTree) Delete(key []byte) (*data.LogRecordPos, bool, error) {
 	var oldVal []byte
 	if err := bpt.tree.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(indexBucketName)
@@ -81,27 +81,27 @@ func (bpt *BPlusTree) Delete(key []byte) (*data.LogRecordPos, bool) {
 		}
 		return nil
 	}); err != nil {
-		panic("failed to delete key into bptree")
+		return nil, false, err
 	}
 	if len(oldVal) == 0 {
-		return nil, false
+		return nil, false, nil
 	}
-	return data.DecodeLogRecordPos(oldVal), true
+	return data.DecodeLogRecordPos(oldVal), true, nil
 }
 
-func (bpt *BPlusTree) Size() int {
+func (bpt *BPlusTree) Size() (int, error) {
 	var size int
 	if err := bpt.tree.View(func(tx *bbolt.Tx) error {
 		buctet := tx.Bucket(indexBucketName)
 		size = buctet.Stats().KeyN
 		return nil
 	}); err != nil {
-		panic("failed to get szie from bptree")
+		return 0, err
 	}
-	return size
+	return size, nil
 }
 
-func (bpt *BPlusTree) Iterator(reverse bool) Iterator {
+func (bpt *BPlusTree) Iterator(reverse bool) (Iterator, error) {
 	return newBptreeIterator(bpt.tree, reverse)
 }
 
@@ -118,10 +118,10 @@ type bptreeIterator struct {
 	currValue []byte
 }
 
-func newBptreeIterator(tree *bbolt.DB, reverse bool) *bptreeIterator {
+func newBptreeIterator(tree *bbolt.DB, reverse bool) (*bptreeIterator, error) {
 	tx, err := tree.Begin(false)
 	if err != nil {
-		panic("failed to begin a transaction")
+		return nil, err
 	}
 	bpi := &bptreeIterator{
 		tx:      tx,
@@ -130,7 +130,7 @@ func newBptreeIterator(tree *bbolt.DB, reverse bool) *bptreeIterator {
 	}
 	// 需要显示调用Rewind，否则currKey以及currValue为空，调用Vaild会报错
 	bpi.Rewind()
-	return bpi
+	return bpi, nil
 }
 
 func (bpi *bptreeIterator) Rewind() {
@@ -166,6 +166,6 @@ func (bpi *bptreeIterator) Value() *data.LogRecordPos {
 	return data.DecodeLogRecordPos(bpi.currValue)
 }
 
-func (bpi *bptreeIterator) Close() {
-	_ = bpi.tx.Rollback() // 只读使用rollback而不是commit
+func (bpi *bptreeIterator) Close() error {
+	return bpi.tx.Rollback() // 只读使用rollback而不是commit
 }

@@ -6,9 +6,9 @@ import (
 )
 
 func main() {
-	opts := bitcask.DefaultOptions
+	opts := bitcask.DefaultOptions()
 	opts.DirPath = "/tmp/bitcask-go"
-	db, err := bitcask.Open(opts)
+	db, err := bitcask.Open(&opts)
 	if err != nil {
 		panic(err)
 	}
@@ -23,8 +23,6 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("val = ", string(val))
-
-
 
 	// err = db.Delete([]byte("name"))
 	// if err != nil {

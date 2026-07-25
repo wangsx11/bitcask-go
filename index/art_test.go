@@ -9,30 +9,37 @@ import (
 
 func TestAdaptiveRadixTree_Put(t *testing.T) {
 	art := NewART()
-	res1 := art.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 100})
+	res1, err := art.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 100})
+	assert.NoError(t, err)
 	assert.Nil(t, res1)
 
-	res2 := art.Put([]byte("a"), &data.LogRecordPos{Fid: 4, Offset: 400})
+	res2, err := art.Put([]byte("a"), &data.LogRecordPos{Fid: 4, Offset: 400})
+	assert.NoError(t, err)
 	assert.Equal(t, uint32(1), res2.Fid)
 	assert.Equal(t, int64(100), res2.Offset)
 
-	art.Put([]byte("b"), &data.LogRecordPos{Fid: 2, Offset: 200})
+	_, _ = art.Put([]byte("b"), &data.LogRecordPos{Fid: 2, Offset: 200})
 
-	art.Put([]byte("c"), &data.LogRecordPos{Fid: 3, Offset: 300})
+	_, _ = art.Put([]byte("c"), &data.LogRecordPos{Fid: 3, Offset: 300})
 
 }
 
 func TestAdaptiveRadixTree_Get(t *testing.T) {
 	art := NewART()
-	res1 := art.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 100})
+	res1, err := art.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 100})
+	assert.NoError(t, err)
 	assert.Nil(t, res1)
-	pos := art.Get([]byte("a"))
+	pos, err := art.Get([]byte("a"))
+	assert.NoError(t, err)
 	assert.NotNil(t, pos)
-	pos1 := art.Get([]byte("b"))
+	pos1, err := art.Get([]byte("b"))
+	assert.NoError(t, err)
 	assert.Nil(t, pos1)
 
-	res2 := art.Put([]byte("a"), &data.LogRecordPos{Fid: 2, Offset: 200})
-	pos2 := art.Get([]byte("a"))
+	res2, err := art.Put([]byte("a"), &data.LogRecordPos{Fid: 2, Offset: 200})
+	assert.NoError(t, err)
+	pos2, err := art.Get([]byte("a"))
+	assert.NoError(t, err)
 	assert.Equal(t, uint32(1), res2.Fid)
 	assert.Equal(t, int64(100), res2.Offset)
 
@@ -42,46 +49,54 @@ func TestAdaptiveRadixTree_Get(t *testing.T) {
 
 func TestAdaptiveRadixTree_Delete(t *testing.T) {
 	art := NewART()
-	res1, ok1 := art.Delete([]byte("nit exists"))
+	res1, ok1, err := art.Delete([]byte("nit exists"))
+	assert.NoError(t, err)
 	assert.False(t, ok1)
 	assert.Nil(t, res1)
-	art.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 100})
-	res2, ok2 := art.Delete([]byte("a"))
+	_, _ = art.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 100})
+	res2, ok2, err := art.Delete([]byte("a"))
+	assert.NoError(t, err)
 	assert.True(t, ok2)
 	assert.Equal(t, uint32(1), res2.Fid)
 	assert.Equal(t, int64(100), res2.Offset)
 
-	pos := art.Get([]byte("a"))
+	pos, err := art.Get([]byte("a"))
+	assert.NoError(t, err)
 	assert.Nil(t, pos)
 }
 
 func TestAdaptiveRadixTree_Size(t *testing.T) {
 	art := NewART()
-	size := art.Size()
+	size, err := art.Size()
+	assert.NoError(t, err)
 	assert.Equal(t, 0, size)
-	art.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 100})
-	art.Put([]byte("b"), &data.LogRecordPos{Fid: 2, Offset: 200})
-	art.Put([]byte("c"), &data.LogRecordPos{Fid: 3, Offset: 300})
-	art.Put([]byte("c"), &data.LogRecordPos{Fid: 4, Offset: 300})
-	size = art.Size()
+	_, _ = art.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 100})
+	_, _ = art.Put([]byte("b"), &data.LogRecordPos{Fid: 2, Offset: 200})
+	_, _ = art.Put([]byte("c"), &data.LogRecordPos{Fid: 3, Offset: 300})
+	_, _ = art.Put([]byte("c"), &data.LogRecordPos{Fid: 4, Offset: 300})
+	size, err = art.Size()
+	assert.NoError(t, err)
 	assert.Equal(t, 3, size)
-	art.Delete([]byte("a"))
-	size = art.Size()
+	_, _, _ = art.Delete([]byte("a"))
+	size, err = art.Size()
+	assert.NoError(t, err)
 	assert.Equal(t, 2, size)
 }
 
 func TestAdaptiveRadixTree_Iterator(t *testing.T) {
 	art := NewART()
-	emptyIterator := art.Iterator(false)
-	emptyIterator.Close()
+	emptyIterator, err := art.Iterator(false)
+	assert.NoError(t, err)
+	assert.NoError(t, emptyIterator.Close())
 
-	art.Put([]byte("ccde"), &data.LogRecordPos{Fid: 1, Offset: 100})
-	art.Put([]byte("adse"), &data.LogRecordPos{Fid: 2, Offset: 200})
-	art.Put([]byte("bbde"), &data.LogRecordPos{Fid: 3, Offset: 300})
-	art.Put([]byte("bade"), &data.LogRecordPos{Fid: 4, Offset: 400})
+	_, _ = art.Put([]byte("ccde"), &data.LogRecordPos{Fid: 1, Offset: 100})
+	_, _ = art.Put([]byte("adse"), &data.LogRecordPos{Fid: 2, Offset: 200})
+	_, _ = art.Put([]byte("bbde"), &data.LogRecordPos{Fid: 3, Offset: 300})
+	_, _ = art.Put([]byte("bade"), &data.LogRecordPos{Fid: 4, Offset: 400})
 
-	iter := art.Iterator(true)
-	defer iter.Close()
+	iter, err := art.Iterator(true)
+	assert.NoError(t, err)
+	defer func() { assert.NoError(t, iter.Close()) }()
 	for iter.Rewind(); iter.Valid(); iter.Next() {
 		key := iter.Key()
 		value := iter.Value()

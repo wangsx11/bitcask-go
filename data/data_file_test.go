@@ -9,7 +9,7 @@ import (
 
 func openTestDataFile(t *testing.T, fileID uint32) *DataFile {
 	t.Helper()
-	dataFile, err := OpenDataFile(t.TempDir(), fileID, fio.StanderFIO)
+	dataFile, err := OpenDataFile(t.TempDir(), fileID, fio.StandardFIO)
 	assert.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, dataFile.Close()) })
 	return dataFile
@@ -34,7 +34,7 @@ func TestDataFileWrite(t *testing.T) {
 }
 
 func TestDataFileClose(t *testing.T) {
-	dataFile, err := OpenDataFile(t.TempDir(), 0, fio.StanderFIO)
+	dataFile, err := OpenDataFile(t.TempDir(), 0, fio.StandardFIO)
 	assert.NoError(t, err)
 	assert.NoError(t, dataFile.Write([]byte("hello\n")))
 	assert.NoError(t, dataFile.Close())

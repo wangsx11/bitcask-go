@@ -10,7 +10,9 @@ import (
 )
 
 var (
-	ErrinvalidCRC = errors.New("invalid crc value, log record mabey corrupted")
+	ErrInvalidCRC = errors.New("invalid crc value, log record may be corrupted")
+	// Deprecated: use ErrInvalidCRC.
+	ErrinvalidCRC = ErrInvalidCRC
 )
 
 const (
@@ -38,19 +40,19 @@ func OpenDataFile(dirPath string, fileId uint32, ioType fio.FileIOType) (*DataFi
 // 打开 Hint 索引文件
 func OpenHintFile(dirPath string) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, HintFileName)
-	return newDatafile(fileName, 0,fio.StanderFIO)
+	return newDatafile(fileName, 0, fio.StandardFIO)
 }
 
 // 标识 merge 完成
 func OpenMergeFinishedFile(dirPath string) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, MergeFinishedFileName)
-	return newDatafile(fileName, 0, fio.StanderFIO)
+	return newDatafile(fileName, 0, fio.StandardFIO)
 }
 
 // 存储seq序列号
 func OpenSeqNoFile(dirPath string) (*DataFile, error) {
 	fileName := filepath.Join(dirPath, SeqNoFileName)
-	return newDatafile(fileName, 0, fio.StanderFIO)
+	return newDatafile(fileName, 0, fio.StandardFIO)
 }
 
 func GetDataFileName(dirPath string, fileId uint32) string {
@@ -83,6 +85,9 @@ func (df *DataFile) Write(buf []byte) error {
 	n, err := df.IoManager.Write(buf)
 	if err != nil {
 		return err
+	}
+	if n != len(buf) {
+		return io.ErrShortWrite
 	}
 	df.WriteOff += int64(n)
 	return nil
@@ -147,7 +152,7 @@ func (df *DataFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
 	// 校验数据的有效性
 	crc := GetLogRecordCRC(logRecord, headerBuf[crc32.Size:headerSize])
 	if crc != header.crc {
-		return nil, 0, ErrinvalidCRC
+		return nil, 0, ErrInvalidCRC
 	}
 
 	return logRecord, recordSize, nil

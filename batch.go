@@ -3,6 +3,7 @@ package bitcask_go
 import (
 	"bitcask-go/data"
 	"encoding/binary"
+	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -20,9 +21,17 @@ type WriteBatch struct {
 }
 
 // NewWriteBatch 初始化 WriteBatch
-func (db *DB) NewWriteBatch(opts WriteBatchOptions) *WriteBatch {
+func (db *DB) NewWriteBatch(opts WriteBatchOptions) (*WriteBatch, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.closed {
+		return nil, ErrClosed
+	}
+	if opts.MaxBatchNum == 0 {
+		return nil, fmt.Errorf("%w: max batch num must be greater than 0", ErrInvalidOptions)
+	}
 	if db.options.IndexerType == BPlusTree && !db.seqNoFileExists && !db.isInitial {
-		panic("cannot use write batch, seq no file not exists")
+		return nil, fmt.Errorf("%w: seq no file does not exist", ErrCorrupted)
 	}
 
 	return &WriteBatch{
@@ -30,17 +39,21 @@ func (db *DB) NewWriteBatch(opts WriteBatchOptions) *WriteBatch {
 		mu:            new(sync.Mutex),
 		db:            db,
 		pendingWrites: make(map[string]*data.LogRecord),
-	}
+	}, nil
 }
 
 // Put 批量写入数据
 func (wb *WriteBatch) Put(key []byte, value []byte) error {
-
 	if len(key) == 0 {
 		return ErrKeyIsEmpty
 	}
 	wb.mu.Lock()
 	defer wb.mu.Unlock()
+	wb.db.mu.RLock()
+	defer wb.db.mu.RUnlock()
+	if wb.db.closed {
+		return ErrClosed
+	}
 
 	// 暂存 LogRecord
 	logrecord := &data.LogRecord{Key: key, Value: value}
@@ -55,9 +68,17 @@ func (wb *WriteBatch) Delete(key []byte) error {
 	}
 	wb.mu.Lock()
 	defer wb.mu.Unlock()
+	wb.db.mu.RLock()
+	defer wb.db.mu.RUnlock()
+	if wb.db.closed {
+		return ErrClosed
+	}
 
 	// 数据不存在则直接返回  --> 不存在的数据没必要删除
-	logRecordPos := wb.db.index.Get(key)
+	logRecordPos, err := wb.db.index.Get(key)
+	if err != nil {
+		return err
+	}
 	if logRecordPos == nil {
 		if wb.pendingWrites[string(key)] != nil {
 			delete(wb.pendingWrites, string(key))
@@ -75,6 +96,11 @@ func (wb *WriteBatch) Delete(key []byte) error {
 func (wb *WriteBatch) Commit() error {
 	wb.mu.Lock() // 这个是保证提交事务时 该 wb 不会执行其他操作(Put、Delete)
 	defer wb.mu.Unlock()
+	wb.db.mu.Lock()
+	defer wb.db.mu.Unlock()
+	if wb.db.closed {
+		return ErrClosed
+	}
 
 	if len(wb.pendingWrites) == 0 {
 		return nil
@@ -84,11 +110,8 @@ func (wb *WriteBatch) Commit() error {
 		return ErrExceedMaxBatchNum
 	}
 
-	// 加锁保证事务提交串行化   
+	// 加锁保证事务提交串行化
 	// TODO 目前对这里还是不太理解
-	wb.db.mu.Lock()
-	defer wb.db.mu.Unlock()
-
 	// 获取当前最新的事务序列号
 	seqNo := atomic.AddUint64(&wb.db.seqNo, 1)
 
@@ -128,12 +151,16 @@ func (wb *WriteBatch) Commit() error {
 	for _, record := range wb.pendingWrites {
 		pos := positions[string(record.Key)]
 		var oldPos *data.LogRecordPos
+		var err error
 		if record.Type == data.LogRecordNormal {
-			oldPos = wb.db.index.Put(record.Key, pos)
+			oldPos, err = wb.db.index.Put(record.Key, pos)
 		}
 
 		if record.Type == data.LogRecordDeleted {
-			oldPos, _ = wb.db.index.Delete(record.Key)
+			oldPos, _, err = wb.db.index.Delete(record.Key)
+		}
+		if err != nil {
+			return err
 		}
 		if oldPos != nil {
 			wb.db.reclaimSize += int64(oldPos.Size)

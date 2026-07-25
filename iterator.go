@@ -12,13 +12,21 @@ type Iterator struct {
 	options   IteratorOptions
 }
 
-func (db *DB) NewIterator(opts IteratorOptions) *Iterator {
-	indexIter := db.index.Iterator(opts.Reverse)
+func (db *DB) NewIterator(opts IteratorOptions) (*Iterator, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if db.closed {
+		return nil, ErrClosed
+	}
+	indexIter, err := db.index.Iterator(opts.Reverse)
+	if err != nil {
+		return nil, err
+	}
 	return &Iterator{
 		db:        db,
 		indexIter: indexIter,
 		options:   opts,
-	}
+	}, nil
 }
 
 func (it *Iterator) Rewind() {
@@ -44,10 +52,13 @@ func (it *Iterator) Value() ([]byte, error) {
 	logrecordPos := it.indexIter.Value()
 	it.db.mu.RLock()
 	defer it.db.mu.RUnlock()
+	if it.db.closed {
+		return nil, ErrClosed
+	}
 	return it.db.getValueByPosition(logrecordPos)
 }
-func (it *Iterator) Close() {
-	it.indexIter.Close()
+func (it *Iterator) Close() error {
+	return it.indexIter.Close()
 }
 func (it *Iterator) skipToNext() {
 	prefixLen := len(it.options.Prefix)

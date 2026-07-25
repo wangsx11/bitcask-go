@@ -24,49 +24,49 @@ func NewART() *AdaptiveRadixTree {
 	}
 }
 
-func (art *AdaptiveRadixTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
+func (art *AdaptiveRadixTree) Put(key []byte, pos *data.LogRecordPos) (*data.LogRecordPos, error) {
 	art.lock.Lock()
 	oldValue, _ := art.tree.Insert(key, pos)
 	art.lock.Unlock()
 	if oldValue == nil {
-		return nil
+		return nil, nil
 	}
 	// fmt.Println("oldValue:", oldValue)
-	return oldValue.(*data.LogRecordPos)
+	return oldValue.(*data.LogRecordPos), nil
 }
 
-func (art *AdaptiveRadixTree) Get(key []byte) *data.LogRecordPos {
+func (art *AdaptiveRadixTree) Get(key []byte) (*data.LogRecordPos, error) {
 	art.lock.RLock()
 	defer art.lock.RUnlock()
 
 	value, ok := art.tree.Search(key)
 	if !ok {
-		return nil
+		return nil, nil
 	}
-	return value.(*data.LogRecordPos) // 这里返回的是interface{}, 需要转换成 LogRecordPos
+	return value.(*data.LogRecordPos), nil // 这里返回的是interface{}, 需要转换成 LogRecordPos
 }
 
-func (art *AdaptiveRadixTree) Delete(key []byte) (*data.LogRecordPos, bool) {
+func (art *AdaptiveRadixTree) Delete(key []byte) (*data.LogRecordPos, bool, error) {
 	art.lock.Lock()
 	oldValue, deleted := art.tree.Delete(key)
 	art.lock.Unlock()
 	if oldValue == nil {
-		return nil, false
+		return nil, false, nil
 	}
-	return oldValue.(*data.LogRecordPos), deleted
+	return oldValue.(*data.LogRecordPos), deleted, nil
 }
 
-func (art *AdaptiveRadixTree) Size() int {
+func (art *AdaptiveRadixTree) Size() (int, error) {
 	art.lock.RLock()
 	size := art.tree.Size()
 	art.lock.RUnlock()
-	return size
+	return size, nil
 }
 
-func (art *AdaptiveRadixTree) Iterator(reverse bool) Iterator {
+func (art *AdaptiveRadixTree) Iterator(reverse bool) (Iterator, error) {
 	art.lock.RLock()
 	defer art.lock.RUnlock()
-	return newARTIterator(art.tree, reverse)
+	return newARTIterator(art.tree, reverse), nil
 }
 
 func (art *AdaptiveRadixTree) Close() error {
@@ -140,6 +140,7 @@ func (ai *artIterator) Value() *data.LogRecordPos {
 	return ai.values[ai.currIndex].pos
 
 }
-func (ai *artIterator) Close() {
+func (ai *artIterator) Close() error {
 	ai.values = nil
+	return nil
 }
