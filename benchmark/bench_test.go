@@ -3,68 +3,83 @@ package benchmark
 import (
 	bitcask "bitcask-go"
 	"bitcask-go/utils"
-	"fmt"
 	"math/rand"
-	"os"
 	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
-var db *bitcask.DB
+const (
+	benchmarkValueSize = 1024
+	benchmarkKeyCount  = 10000
+)
 
-func init() {
-	// 初始化存储引擎实例
-	options := bitcask.DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-benchmark")
-	options.DirPath = dir
+func openBenchmarkDB(b *testing.B) *bitcask.DB {
+	b.Helper()
+	opts := *bitcask.DefaultOptions
+	opts.DirPath = b.TempDir()
 
-	var err error
-	db, err = bitcask.Open(options)
+	db, err := bitcask.Open(&opts)
 	if err != nil {
-		panic(fmt.Sprintf("failed to open db: %v", err))
+		b.Fatalf("open benchmark database: %v", err)
 	}
-
-}
- 
-func Benchmark_Put(b *testing.B) {
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		err := db.Put(utils.GetTestKey(i), utils.RandomValue(1024))
-		assert.Nil(b, err)
-	}
+	b.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			b.Errorf("close benchmark database: %v", err)
+		}
+	})
+	return db
 }
 
+func BenchmarkPut(b *testing.B) {
+	db := openBenchmarkDB(b)
+	value := make([]byte, benchmarkValueSize)
 
-func Benchmark_Get(b *testing.B) {
-	for i := 0; i < 10000; i++ {
-		err := db.Put(utils.GetTestKey(i), utils.RandomValue(1024))
-		assert.Nil(b, err)
-	}
-	rand.Seed(time.Now().UnixNano())
-	b.ResetTimer()
 	b.ReportAllocs()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := db.Get(utils.GetTestKey(rand.Int()))
-		if err != nil && err != bitcask.ErrKeyNotFound {
+		if err := db.Put(utils.GetTestKey(i), value); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
+func BenchmarkGet(b *testing.B) {
+	db := openBenchmarkDB(b)
+	value := make([]byte, benchmarkValueSize)
+	for i := 0; i < benchmarkKeyCount; i++ {
+		if err := db.Put(utils.GetTestKey(i), value); err != nil {
+			b.Fatal(err)
+		}
+	}
 
-func Benchmark_Delete(b *testing.B) {
-	rand.Seed(time.Now().UnixNano())
+	random := rand.New(rand.NewSource(1))
+	keys := make([][]byte, benchmarkKeyCount)
+	for i := range keys {
+		keys[i] = utils.GetTestKey(random.Intn(benchmarkKeyCount))
+	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
-
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := db.Delete(utils.GetTestKey(rand.Int()))
-		assert.Nil(b, err)
+		if _, err := db.Get(keys[i%len(keys)]); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkDelete(b *testing.B) {
+	db := openBenchmarkDB(b)
+	value := make([]byte, benchmarkValueSize)
+	for i := 0; i < b.N; i++ {
+		if err := db.Put(utils.GetTestKey(i), value); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := db.Delete(utils.GetTestKey(i)); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

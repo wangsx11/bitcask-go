@@ -2,17 +2,13 @@ package bitcask_go
 
 import (
 	"bitcask-go/utils"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestDB_WriteBatch(t *testing.T) {
-	opts := DefaultOptions
-	
-	dir, _ := os.MkdirTemp("", "bitcask-go-batch-1")
-	opts.DirPath = dir
+	opts := testOptions(t)
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.Nil(t, err)
@@ -49,9 +45,7 @@ func TestDB_WriteBatch(t *testing.T) {
 }
 
 func TestDB_WriteBatch2(t *testing.T) {
-	opts := DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-batch-2")
-	opts.DirPath = dir
+	opts := testOptions(t)
 	db, err := Open(opts)
 	defer destroyDB(db)
 	assert.Nil(t, err)
@@ -80,6 +74,7 @@ func TestDB_WriteBatch2(t *testing.T) {
 	assert.Nil(t, err)
 
 	db2, err := Open(opts)
+	defer destroyDB(db2)
 	assert.Nil(t, err)
 	_, err = db2.Get(utils.GetTestKey(1))
 	assert.Equal(t, ErrKeyNotFound, err)
@@ -87,33 +82,3 @@ func TestDB_WriteBatch2(t *testing.T) {
 	assert.Equal(t, uint64(2), db.seqNo) // 校验事务序列号 Commit了两次，所以当前序列号为2
 
 }
-
-// func TestDB_WriteBatch3(t *testing.T) {
-// 	opts := DefaultOptions
-// 	// dir, _ := os.MkdirTemp("", "bitcask-go-batch-3")
-// 	dir := "/tmp/bitcask-go-batch-3"
-// 	opts.DirPath = dir
-// 	db, err := Open(opts)
-// 	// defer destroyDB(db)
-// 	assert.Nil(t, err)
-// 	assert.NotNil(t, db)
-
-// 	keys := db.ListKeys()
-// 	t.Log(len(keys))
-
-// 	wbOptions := DefaultWriteBatchOptions
-// 	wbOptions.MaxBatchNum = 1000000
-// 	wb := db.NewWriteBatch(wbOptions)
-
-// 	// 如果在执行过程中手动中止程序(没有执行Commit操作， 则len(db.ListKeys()) 值为0)
-// 	for i := 0; i < 500000; i++ {
-// 		t.Log(i)
-// 		err := wb.Put(utils.GetTestKey(i), utils.RandomValue(1024))
-// 		assert.Nil(t, err)
-// 	}
-// 	err = wb.Commit()
-// 	assert.Nil(t, err)
-
-// 	err = db.Close()
-// 	assert.Nil(t, err)
-// }

@@ -2,16 +2,13 @@ package bitcask_go
 
 import (
 	"bitcask-go/utils"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestDB_NewIterator(t *testing.T) {
-	opts := DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-iterator-1")
-	opts.DirPath = dir
+	opts := testOptions(t)
 	opts.DataFileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -19,15 +16,14 @@ func TestDB_NewIterator(t *testing.T) {
 	assert.NotNil(t, db)
 
 	iterator := db.NewIterator(DefaultIteratorOptions)
+	defer iterator.Close()
 	assert.NotNil(t, iterator)
 	assert.Equal(t, false, iterator.Valid())
 	t.Log(iterator.Valid())
 }
 
 func TestDB_NewIterator_One_Value(t *testing.T) {
-	opts := DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-iterator-2")
-	opts.DirPath = dir
+	opts := testOptions(t)
 	opts.DataFileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -50,9 +46,7 @@ func TestDB_NewIterator_One_Value(t *testing.T) {
 }
 
 func TestDB_NewIterator_Mul_Values(t *testing.T) {
-	opts := DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-iterator-3")
-	opts.DirPath = dir
+	opts := testOptions(t)
 	opts.DataFileSize = 64 * 1024 * 1024
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -72,6 +66,7 @@ func TestDB_NewIterator_Mul_Values(t *testing.T) {
 
 	// 正向迭代
 	iter1 := db.NewIterator(DefaultIteratorOptions)
+	defer iter1.Close()
 	for iter1.Rewind(); iter1.Valid(); iter1.Next() {
 		t.Log("key = ", string(iter1.Key()))
 		assert.NotNil(t, iter1.Key())
@@ -86,6 +81,7 @@ func TestDB_NewIterator_Mul_Values(t *testing.T) {
 	iter_opts1 := DefaultIteratorOptions
 	iter_opts1.Reverse = true
 	iter2 := db.NewIterator(iter_opts1)
+	defer iter2.Close()
 	for iter2.Rewind(); iter2.Valid(); iter2.Next() {
 		t.Log("key = ", string(iter2.Key()))
 		assert.NotNil(t, iter2.Key())
@@ -101,6 +97,7 @@ func TestDB_NewIterator_Mul_Values(t *testing.T) {
 	iter_opts2 := DefaultIteratorOptions
 	iter_opts2.Prefix = []byte("a")
 	iter3 := db.NewIterator(iter_opts2)
+	defer iter3.Close()
 	for iter3.Rewind(); iter3.Valid(); iter3.Next() {
 		t.Log("key = ", string(iter3.Key()))
 		assert.NotNil(t, iter3.Key())
@@ -109,18 +106,12 @@ func TestDB_NewIterator_Mul_Values(t *testing.T) {
 }
 
 func TestIterator(t *testing.T) {
-	opts := DefaultOptions
-	opts.DirPath = "/tmp/bitcask-go-test-iterator"
+	opts := testOptions(t)
 	opts.DataFileSize = 1 * 1024 * 1024
 	db, err := Open(opts)
-	// defer func() {
-	// 	os.RemoveAll(db.options.DirPath)
-	// }()
 	assert.Nil(t, err)
 	assert.NotNil(t, db)
-	defer func() {
-		os.RemoveAll(db.options.DirPath)
-	}()
+	defer destroyDB(db)
 	db.Put([]byte("aaa"), []byte("value1"))
 	// db.Put([]byte("bbb"), []byte("value2"))
 	// db.Put([]byte("ccc"), []byte("value3"))
@@ -132,34 +123,4 @@ func TestIterator(t *testing.T) {
 	val, err := db.Get([]byte("dsdad"))
 	t.Log(string(val), err)
 
-
-	// iterOpts := DefaultIteratorOptions
-	// iter1 := db.newIterator(iterOpts)
-	// for iter1.Rewind(); iter1.Valid(); iter1.Next() {
-	// 	key := iter1.Key()
-	// 	val, err := iter1.Value()
-	// 	assert.Nil(t, err)
-	// 	t.Log(string(key), string(val))
-	// }
-
-	// // 反向遍历
-	// iterOpts.Reverse = true
-	// iter2 := db.newIterator(iterOpts)
-	// for iter2.Rewind(); iter2.Valid(); iter2.Next() {
-	// 	key := iter2.Key()
-	// 	val, err := iter2.Value()
-	// 	assert.Nil(t, err)
-	// 	t.Log(string(key), string(val))
-	// }
-
-	// 仅输出满足该前缀的记录
-	// iterOpts.Prefix = []byte{'d'}
-	// iterOpts.Reverse = false
-	// iter3 := db.NewIterator(iterOpts)
-	// for iter3.Rewind(); iter3.Valid(); iter3.Next() {
-	// 	key := iter3.Key()
-	// 	val, err := iter3.Value()
-	// 	assert.Nil(t, err)
-	// 	t.Log(string(key), string(val))
-	// }
 }
